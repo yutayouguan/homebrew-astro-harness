@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "忽略“已是最新”判断，强制重新下载校验并重写 cask"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -25,11 +30,27 @@ jobs:
           repo="yutayouguan/astro-harness"
           tag=$(gh api "repos/$repo/releases/latest" --jq '.tag_name')
           version="${tag#v}"
-          assets=$(gh api "repos/$repo/releases/latest" --jq '.assets[] | "\(.name) \(.digest)"')
-          arm_sha=$(echo "$assets" | awk '/aarch64\.dmg/ {print $2}' | sed 's/^sha256://')
-          intel_sha=$(echo "$assets" | awk '/x64\.dmg$/ {print $2}' | sed 's/^sha256://')
-          if [ -z "$version" ] || [ -z "$arm_sha" ] || [ -z "$intel_sha" ]; then
-            echo "::error::无法从 $repo 的最新 Release 读取版本或校验和"
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "::error::无法从 $repo 读取最新 Release 版本"
+            exit 1
+          fi
+
+          current=$(sed -n 's/^  version "\(.*\)"/\1/p' Casks/astro-harness.rb | head -1)
+          if [ "$current" = "$version" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "cask 已是最新（$version），跳过下载"
+            exit 0
+          fi
+
+          # release assets 的 digest 字段用仓库自带 token 取不到，直接下载后自己算。
+          work=$(mktemp -d)
+          gh release download --repo "$repo" --pattern '*aarch64.dmg' --dir "$work" --clobber
+          gh release download --repo "$repo" --pattern '*x64.dmg' --dir "$work" --clobber
+          arm_file=$(ls "$work"/*aarch64.dmg | head -1)
+          intel_file=$(ls "$work"/*x64.dmg | head -1)
+          arm_sha=$(sha256sum "$arm_file" | awk '{print $1}')
+          intel_sha=$(sha256sum "$intel_file" | awk '{print $1}')
+          if [ -z "$arm_sha" ] || [ -z "$intel_sha" ]; then
+            echo "::error::未能计算安装包校验和"
             exit 1
           fi
           # 用逐行 echo 生成：YAML 块里的 heredoc 结束符会被缩进，bash 不认。
