@@ -32,32 +32,31 @@ jobs:
             echo "::error::无法从 $repo 的最新 Release 读取版本或校验和"
             exit 1
           fi
-          cat > Casks/astro-harness.rb <<RB
-          cask "astro-harness" do
-            version "$version"
-
-            on_arm do
-              sha256 "$arm_sha"
-              url "https://github.com/$repo/releases/download/v#{version}/Astro.Harness_#{version}_aarch64.dmg"
-            end
-            on_intel do
-              sha256 "$intel_sha"
-              url "https://github.com/$repo/releases/download/v#{version}/Astro.Harness_#{version}_x64.dmg"
-            end
-
-            name "Astro Harness"
-            desc "Local-first multimodal AI agent desktop workspace"
-            homepage "https://github.com/$repo"
-
-            app "Astro Harness.app"
-
-            zap trash: [
-              "~/.astro",
-            ]
-          end
-          RB
-          # 去掉 heredoc 的缩进（cask 文件必须顶格）
-          sed -i 's/^          //' Casks/astro-harness.rb
+          # 用逐行 echo 生成：YAML 块里的 heredoc 结束符会被缩进，bash 不认。
+          {
+            echo 'cask "astro-harness" do'
+            echo "  version \"$version\""
+            echo ''
+            echo '  on_arm do'
+            echo "    sha256 \"$arm_sha\""
+            echo "    url \"https://github.com/$repo/releases/download/v#{version}/Astro.Harness_#{version}_aarch64.dmg\""
+            echo '  end'
+            echo '  on_intel do'
+            echo "    sha256 \"$intel_sha\""
+            echo "    url \"https://github.com/$repo/releases/download/v#{version}/Astro.Harness_#{version}_x64.dmg\""
+            echo '  end'
+            echo ''
+            echo '  name "Astro Harness"'
+            echo '  desc "Local-first multimodal AI agent desktop workspace"'
+            echo "  homepage \"https://github.com/$repo\""
+            echo ''
+            echo '  app "Astro Harness.app"'
+            echo ''
+            echo '  zap trash: ['
+            echo '    "~/.astro",'
+            echo '  ]'
+            echo 'end'
+          } > Casks/astro-harness.rb
           echo "version=$version" >> "$GITHUB_ENV"
 
       - name: 提交（有变化时）
