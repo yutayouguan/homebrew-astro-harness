@@ -34,6 +34,7 @@ jobs:
             echo "::error::无法从 $repo 读取最新 Release 版本"
             exit 1
           fi
+          echo "version=$version" >> "$GITHUB_ENV"
 
           current=$(sed -n 's/^  version "\(.*\)"/\1/p' Casks/astro-harness.rb | head -1)
           if [ "$current" = "$version" ] && [ "${{ inputs.force }}" != "true" ]; then
@@ -78,7 +79,6 @@ jobs:
             echo '  ]'
             echo 'end'
           } > Casks/astro-harness.rb
-          echo "version=$version" >> "$GITHUB_ENV"
 
       - name: 提交（有变化时）
         run: |
