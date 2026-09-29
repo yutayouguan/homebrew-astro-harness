@@ -1,0 +1,71 @@
+name: bump-cask
+
+# 每天检查一次主仓库的最新 Release，把 cask 的版本与 sha256 更新到最新。
+# 也可以在发版后手动触发。
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 用最新 Release 更新 cask
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo="yutayouguan/astro-harness"
+          tag=$(gh api "repos/$repo/releases/latest" --jq '.tag_name')
+          version="${tag#v}"
+          assets=$(gh api "repos/$repo/releases/latest" --jq '.assets[] | "\(.name) \(.digest)"')
+          arm_sha=$(echo "$assets" | awk '/aarch64\.dmg/ {print $2}' | sed 's/^sha256://')
+          intel_sha=$(echo "$assets" | awk '/x64\.dmg$/ {print $2}' | sed 's/^sha256://')
+          if [ -z "$version" ] || [ -z "$arm_sha" ] || [ -z "$intel_sha" ]; then
+            echo "::error::无法从 $repo 的最新 Release 读取版本或校验和"
+            exit 1
+          fi
+          cat > Casks/astro-harness.rb <<RB
+          cask "astro-harness" do
+            version "$version"
+
+            on_arm do
+              sha256 "$arm_sha"
+              url "https://github.com/$repo/releases/download/v#{version}/Astro.Harness_#{version}_aarch64.dmg"
+            end
+            on_intel do
+              sha256 "$intel_sha"
+              url "https://github.com/$repo/releases/download/v#{version}/Astro.Harness_#{version}_x64.dmg"
+            end
+
+            name "Astro Harness"
+            desc "Local-first multimodal AI agent desktop workspace"
+            homepage "https://github.com/$repo"
+
+            app "Astro Harness.app"
+
+            zap trash: [
+              "~/.astro",
+            ]
+          end
+          RB
+          # 去掉 heredoc 的缩进（cask 文件必须顶格）
+          sed -i 's/^          //' Casks/astro-harness.rb
+          echo "version=$version" >> "$GITHUB_ENV"
+
+      - name: 提交（有变化时）
+        run: |
+          if git diff --quiet; then
+            echo "cask 已是最新（$version）"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "cask: bump astro-harness to $version"
+          git push
