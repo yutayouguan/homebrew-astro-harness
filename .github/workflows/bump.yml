@@ -1,10 +1,11 @@
 name: bump-cask
 
-# 每天检查一次主仓库的最新 Release，把 cask 的版本与 sha256 更新到最新。
-# 也可以在发版后手动触发。
+# 每小时检查一次主仓库的最新 Release，把 cask 的版本与 sha256 跟到最新。
+# 想发版后立即跟版，手动触发即可：
+#   gh workflow run bump.yml -R yutayouguan/homebrew-astro-harness
 on:
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions:
